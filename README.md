@@ -26,14 +26,28 @@ argo submit -n argo --watch https://raw.githubusercontent.com/argoproj/argo-work
 ```
 
 
-#### Checked dashboard
+#### Check dashboard
 
 ```bash
 kubectl -n argo port-forward service/argo-server 2746:2746
 ```
 
 
+#### Real workflow
 
+```bash
+argo submit -n argo --watch workflow.yml
+```
+
+
+## Takeaways
+
+* Generally impressed with user experience, polish, ease. Took 1 hour to build
+  end-to-end, starting from knowing nothing and Argo not installed, to finishing our
+  seal tags example.
+* Submitting and watching jobs is amazing
+* `argo logs @latest` :star_struck:
+* Next step: dependencies, >1 processing step
 
 
 ## Resources
