@@ -1,0 +1,17 @@
+name: "argo-exploration"
+channels:
+  - "conda-forge"
+  - "nodefaults"
+dependencies:
+  ## Explicit dependencies: Things we import
+  - fsspec
+  - pyyaml
+  - loguru
+
+
+  ## Implicit dependencies: Required for optional functionality of things we
+  ## import
+
+  # for fsspec http filesystem support:
+  - requests
+  - aiohttp
