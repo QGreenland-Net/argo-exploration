@@ -84,7 +84,6 @@ def transform_step(*, layer: dict, step_number: int) -> dict:
 
     args = []
     inputs = []
-    outputs = []
     for arg in STEP["args"][1:]:
         args.append(arg.format(
             input_dir=INPUT_DIR,
@@ -124,28 +123,41 @@ def transform_step(*, layer: dict, step_number: int) -> dict:
                 "path": f"{ASSETS_DIR}/{fn}",
                 "http": {"url": f"{ASSETS_URL}/{fn}"},
             })
-        elif "{output_dir}" in arg:
-            outputs.append({
-                "name": output_artifact_name(step_number),
-                "path": OUTPUT_DIR,
-            })
 
 
     step_manifest = {
         "name": step_id(step_number),
         "inline": {
             "container": {
-                "image": "ghcr.io/osgeo/gdal:alpine-small-3.9.0",
+                "image": "ghcr.io/osgeo/gdal:alpine-normal-3.9.0",
                 "command": [STEP["args"][0]],
                 "args": args,
+                "volumeMounts": [{
+                    "name": "output-mount",
+                    "mountPath": OUTPUT_DIR,
+                }],
             },
+            # The emptyDir volume ensures the output artifact directory exists and is ready
+            # to receive data
+            "volumes": [{
+                "name": "output-mount",
+                "emptyDir": {},
+            }],
         },
     }
 
     if inputs:
         step_manifest["inline"]["inputs"] = {"artifacts": inputs}
-    if outputs:
-        step_manifest["inline"]["outputs"] = {"artifacts": outputs}
+
+
+    # NOTE: I didn't include this in the original construction because I want outputs to
+    # be after inputs.
+    step_manifest["inline"]["outputs"] = {
+        "artifacts": [{
+            "name": output_artifact_name(step_number),
+            "path": OUTPUT_DIR,
+        }],
+    }
 
     return step_manifest
 
@@ -170,7 +182,7 @@ def _workflow_from_layer(layer: dict) -> dict:
         "apiVersion": "argoproj.io/v1alpha1",
         "kind": "Workflow",
         "metadata": {
-            "generateName": f"ogdc-recipe-{layer['config']['id']}-",
+            "generateName": f"ogdc-recipe-{layer['config']['id'].replace('_', '-')}-",
             # TODO: What is this label?
             "labels": {"workflows.argoproj.io/archive-strategy": "false"},
             "annotations": {
