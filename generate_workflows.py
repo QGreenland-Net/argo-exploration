@@ -240,7 +240,7 @@ def main() -> None:
     for workflow in workflows:
         output_fn = f"{workflow['metadata']['annotations']['qgreenlandLayerId']}.yml"
         output_file = WORKFLOWS_DIR / output_fn
-        output_file.write_text(yaml.dump(workflow))
+        output_file.write_text(yaml.dump(workflow, sort_keys=False))
 
 
 if __name__ == "__main__":
