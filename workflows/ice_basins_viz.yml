@@ -26,63 +26,78 @@ spec:
         #         return [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
 
         - name: "stage"
-          inline:
-
-            inputs:
-              artifacts:
-                - &viz-config-json-artifact
-                  name: "viz-config-json"
-                  path: "/tmp/config.json"
-                  http:
-                    url: "https://gist.githubusercontent.com/mfisher87/f13f87949809a4eef0485f3eb05b9534/raw/572f00bb76a7cb0b50a87078e4f8d9f7b8841818/qgnet_config.json"
-                - name: "staging-input"
-                  path: "/tmp/pdg_processing/input/ice_basins.gpkg"
-                  http:
-                    # url: "https://nsidc.org/qgreenland/layers/ice_basins/ice_basins.gpkg"
-                    url: "https://github.com/QGreenland-Net/argo-exploration/raw/medium-workflow/data/Ice_Basins_1000.gpkg"
-
-            container:
-              image: "ghcr.io/mfisher87/pdgstaging"
-              command: ["python"]
-              args:
-                - "-m"
-                - "pdgstaging"
-                - "-c"
-                - "/tmp/config.json"
-
-            outputs:
-              # NOTE: We expected the output to contain z-levels 0,1,2,...,13
-              # (as specified by JSON config input), but it only contained
-              # 13. TODO: Figure out if we're using pdgstaging wrong or if
-              # it's a bug??
-              artifacts:
-                - name: "staging-output"
-                  # NOTE: Matches config!
-                  path: "/tmp/pdg_processing/output/staged"
+          template: "stage"
+          arguments:
+            artifacts:
+              - name: "viz-config-json"
+                http:
+                  url: "https://gist.githubusercontent.com/mfisher87/f13f87949809a4eef0485f3eb05b9534/raw/47cbf12b30b40d0a51da51dd729985ff5a8459e8/qgnet_config.json"
+              - name: "staging-input"
+                http:
+                  # url: "https://nsidc.org/qgreenland/layers/ice_basins/ice_basins.gpkg"
+                  url: "https://github.com/QGreenland-Net/argo-exploration/raw/medium-workflow/data/Ice_Basins_1000.gpkg"
+                subPath: "ice_basins.gpkg"
 
         - name: "rasterize"
           dependencies: ["stage"]
-          inline:
+          template: "rasterize"
+          arguments:
+            artifacts:
+              - name: "viz-config-json"
+                from: "{{ dag.tasks.stage.inputs.artifacts.viz-config-json }}" 
+              - name: "staging-output"
+                from: "{{ dag.tasks.stage.outputs.artifacts.staging-output }}"
 
-            inputs:
-              artifacts:
-                - *viz-config-json-artifact
-                - name: "staging-output"
-                  from: "{{ steps.stage.outputs.artifacts.staging-output }}"
-                    # path: "{{ steps.stage.outputs.artifacts.staging-output.path }}"
-                  path: "/tmp/foo"
 
-            container:
-              # TODO: Dockerize the pdgraster library
-              image: "ghcr.io/permafrostdiscoverygateway/viz-workflow:0.2.3"
-              command: ["python"]
-              args:
-                - "-m"
-                - "pdgraster"
-                - "-c"
-                - "/tmp/config.json"
+  - name: "stage"
+    inputs:
+      artifacts:
+        - &viz-config-json-artifact
+          name: "viz-config-json"
+          path: "/tmp/config.json"
+        - name: "staging-input"
+          path: "/tmp/pdg_processing/input"
 
-            outputs:
-              artifacts:
-                - name: "raster-output"
-                  path: "/tmp/pdg_processing/output/raster"
+    container:
+      image: "ghcr.io/mfisher87/pdgstaging"
+      command: ["python"]
+      args:
+        - "-m"
+        - "pdgstaging"
+        - "-c"
+        - "/tmp/config.json"
+
+    outputs:
+      artifacts:
+        # NOTE: We expected the output to contain z-levels 0,1,2,...,13
+        # (as specified by JSON config input), but it only contained
+        # 13. TODO: Figure out if we're using pdgstaging wrong or if
+        # it's a bug??
+        - name: "staging-output"
+          # IMPORTANT: Config must match this.
+          path: "/tmp/pdg_processing/output/staged"
+
+
+  - name: "rasterize"
+    inputs:
+      artifacts:
+        - *viz-config-json-artifact
+        - name: "staging-output"
+          # IMPORTANT: Config must match this.
+          path: "/tmp/pdg_processing/output/staged"
+
+    container:
+      # TODO: Dockerize the pdgraster library
+      image: "ghcr.io/permafrostdiscoverygateway/viz-workflow:0.2.3"
+      command: ["python"]
+      args:
+        - "-m"
+        - "pdgraster"
+        - "-c"
+        - "/tmp/config.json"
+
+    outputs:
+      artifacts:
+        - name: "raster-output"
+          # IMPORTANT: Config must match this.
+          path: "/tmp/pdg_processing/output/raster"
