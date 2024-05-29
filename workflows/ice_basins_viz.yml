@@ -15,57 +15,37 @@ spec:
   - name: "main"
     dag:
       tasks:
-        # # NOTE: This step is only needed to batch many input files; we have
-        # # just one. Come back to this!
-        # - name: "batch"
-        #   inline:
-        #     container:
-        #       image: "python:alpine3.9"
-        #       command: ["python"]
-        #       source: |
-        #         return [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
-
         - name: "stage"
-          template: "stage"
-          arguments:
-            artifacts:
-              - name: "viz-config-json"
-                http:
-                  url: "https://gist.githubusercontent.com/mfisher87/f13f87949809a4eef0485f3eb05b9534/raw/47cbf12b30b40d0a51da51dd729985ff5a8459e8/qgnet_config.json"
-              - name: "staging-input"
-                http:
-                  # url: "https://nsidc.org/qgreenland/layers/ice_basins/ice_basins.gpkg"
-                  url: "https://github.com/QGreenland-Net/argo-exploration/raw/medium-workflow/data/Ice_Basins_1000.gpkg"
-                subPath: "ice_basins.gpkg"
+          template: "stage-template"
 
         - name: "rasterize"
           dependencies: ["stage"]
-          template: "rasterize"
+          template: "rasterize-template"
           arguments:
             artifacts:
-              - name: "viz-config-json"
-                from: "{{ dag.tasks.stage.inputs.artifacts.viz-config-json }}" 
               - name: "staging-output"
-                from: "{{ dag.tasks.stage.outputs.artifacts.staging-output }}"
+                from: "{{ tasks.stage.outputs.artifacts.staging-output }}"
 
 
-  - name: "stage"
+  - name: "stage-template"
     inputs:
+      # NOTE: Can override these with "arguments"
       artifacts:
         - &viz-config-json-artifact
           name: "viz-config-json"
+          http:
+            url: "https://gist.githubusercontent.com/mfisher87/f13f87949809a4eef0485f3eb05b9534/raw/47cbf12b30b40d0a51da51dd729985ff5a8459e8/qgnet_config.json"
           path: "/tmp/config.json"
         - name: "staging-input"
-          path: "/tmp/pdg_processing/input"
+          http:
+            # url: "https://nsidc.org/qgreenland/layers/ice_basins/ice_basins.gpkg"
+            url: "https://github.com/QGreenland-Net/argo-exploration/raw/medium-workflow/data/Ice_Basins_1000.gpkg"
+          path: "/tmp/pdg_processing/input/ice_basins.gpkg"
 
     container:
       image: "ghcr.io/mfisher87/pdgstaging"
       command: ["python"]
-      args:
-        - "-m"
-        - "pdgstaging"
-        - "-c"
-        - "/tmp/config.json"
+      args: ["-m", "pdgstaging", "-c", "{{inputs.artifacts.viz-config-json.path}}"]
 
     outputs:
       artifacts:
@@ -78,7 +58,7 @@ spec:
           path: "/tmp/pdg_processing/output/staged"
 
 
-  - name: "rasterize"
+  - name: "rasterize-template"
     inputs:
       artifacts:
         - *viz-config-json-artifact
@@ -87,14 +67,9 @@ spec:
           path: "/tmp/pdg_processing/output/staged"
 
     container:
-      # TODO: Dockerize the pdgraster library
       image: "ghcr.io/permafrostdiscoverygateway/viz-workflow:0.2.3"
       command: ["python"]
-      args:
-        - "-m"
-        - "pdgraster"
-        - "-c"
-        - "/tmp/config.json"
+      args: ["-m", "pdgraster", "-c", "{{inputs.artifacts.viz-config-json.path}}"]
 
     outputs:
       artifacts:
