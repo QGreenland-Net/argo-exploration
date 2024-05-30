@@ -15,20 +15,76 @@ spec:
   - name: "main"
     dag:
       tasks:
-        - name: "stage"
-          template: "stage-template"
+        - name: "batch"
+          template: "batch-template"
 
-        - name: "rasterize"
-          dependencies: ["stage"]
-          template: "rasterize-template"
+        - name: "stage"
+          dependencies: ["batch"]
+          template: "stage-template"
           arguments:
+            parameters:
+              - name: "chunk-filepath"
+                value: "{{ item }}"
             artifacts:
-              - name: "staging-output"
-                from: "{{ tasks.stage.outputs.artifacts.staging-output }}"
+              - name: "batch-output"
+                from: "{{ tasks.batch.outputs.artifacts.batch-output }}"
+          # NOTE: This is where parallelism is managed.
+          withParam: "{{ tasks.batch.outputs.result }}"
+
+
+        # - name: "rasterize"
+        #   dependencies: ["stage"]
+        #   template: "rasterize-template"
+        #   arguments:
+        #     artifacts:
+        #       - name: "staging-output"
+        #         from: "{{ tasks.stage.outputs.artifacts.staging-output }}"
+
+
+  - name: "batch-template"
+    inputs:
+      parameters:
+        - name: "num_features"
+          value: 50
+      artifacts:
+        - name: "batch-input"
+          http:
+            # url: "https://nsidc.org/qgreenland/layers/ice_basins/ice_basins.gpkg"
+            url: "https://github.com/QGreenland-Net/argo-exploration/raw/medium-workflow/data/Ice_Basins_1000.gpkg"
+          path: "/tmp/pdg_processing/input/ice_basins.gpkg"
+    script:
+      image: "ghcr.io/mfisher87/pdgstaging"
+      command: ["python"]
+      source: |
+        import json
+        import sys
+        from pathlib import Path
+
+        import geopandas as gpd
+
+        gdf = gpd.read_file("{{inputs.artifacts.batch-input.path}}")
+        results = []
+        for idx, start in enumerate(range(0, len(gdf), {{inputs.parameters.num_features}})):
+            output_fp = Path("{{outputs.artifacts.batch-output.path}}/" + f"chunk-{idx}.gpkg")
+            output_fp.parent.mkdir(parents=True, exist_ok=True)
+            gdf[start:start+{{inputs.parameters.num_features}}].to_file(
+                filename=output_fp,
+                driver="GPKG",
+            )
+            results.append(str(output_fp))
+
+        json.dump(results, sys.stdout)
+    outputs:
+      artifacts:
+        - name: "batch-output"
+          path: "/tmp/pdg_processing/output/batch"
 
 
   - name: "stage-template"
     inputs:
+      parameters:
+        # TODO: How to use this parameter?
+        - name: "chunk-filepath"
       # NOTE: Can override these with "arguments"
       artifacts:
         - &viz-config-json-artifact
@@ -36,43 +92,47 @@ spec:
           http:
             url: "https://gist.githubusercontent.com/mfisher87/f13f87949809a4eef0485f3eb05b9534/raw/47cbf12b30b40d0a51da51dd729985ff5a8459e8/qgnet_config.json"
           path: "/tmp/config.json"
-        - name: "staging-input"
-          http:
-            # url: "https://nsidc.org/qgreenland/layers/ice_basins/ice_basins.gpkg"
-            url: "https://github.com/QGreenland-Net/argo-exploration/raw/medium-workflow/data/Ice_Basins_1000.gpkg"
-          path: "/tmp/pdg_processing/input/ice_basins.gpkg"
+        - name: "batch-output"
+          # TODO: DRY
+          path: "/tmp/pdg_processing/output/batch"
 
-    container:
+    script:
       image: "ghcr.io/mfisher87/pdgstaging"
       command: ["python"]
-      args: ["-m", "pdgstaging", "-c", "{{inputs.artifacts.viz-config-json.path}}"]
+      source: |
+        import json
+        from pathlib import Path
+
+        from pdgstaging import TileStager
+
+        workflow_config = json.loads(Path("{{inputs.artifacts.viz-config-json.path}}").read_text())
+        stager = TileStager(workflow_config, check_footprints=False)
+        stager.stage("{{inputs.parameters.chunk-filepath}}")
+        print("Staging done")
 
     outputs:
       artifacts:
-        # NOTE: We expected the output to contain z-levels 0,1,2,...,13
-        # (as specified by JSON config input), but it only contained
-        # 13. TODO: Figure out if we're using pdgstaging wrong or if
-        # it's a bug??
         - name: "staging-output"
           # IMPORTANT: Config must match this.
           path: "/tmp/pdg_processing/output/staged"
 
 
-  - name: "rasterize-template"
-    inputs:
-      artifacts:
-        - *viz-config-json-artifact
-        - name: "staging-output"
-          # IMPORTANT: Config must match this.
-          path: "/tmp/pdg_processing/output/staged"
+  # - name: "rasterize-template"
+  #   inputs:
+  #     artifacts:
+  #       - *viz-config-json-artifact
+  #       - name: "staging-output"
+  #         # IMPORTANT: Config must match this.
+  #         # TODO: DRY
+  #         path: "/tmp/pdg_processing/output/staged"
 
-    container:
-      image: "ghcr.io/permafrostdiscoverygateway/viz-workflow:0.2.3"
-      command: ["python"]
-      args: ["-m", "pdgraster", "-c", "{{inputs.artifacts.viz-config-json.path}}"]
+  #   container:
+  #     image: "ghcr.io/permafrostdiscoverygateway/viz-workflow:0.2.3"
+  #     command: ["python"]
+  #     args: ["-m", "pdgraster", "-c", "{{inputs.artifacts.viz-config-json.path}}"]
 
-    outputs:
-      artifacts:
-        - name: "raster-output"
-          # IMPORTANT: Config must match this.
-          path: "/tmp/pdg_processing/output/raster"
+  #   outputs:
+  #     artifacts:
+  #       - name: "raster-output"
+  #         # IMPORTANT: Config must match this.
+  #         path: "/tmp/pdg_processing/output/raster"
