@@ -1,0 +1,61 @@
+apiVersion: "argoproj.io/v1alpha1"
+kind: "Workflow"
+metadata:
+  generateName: "ogdc-workflow-viz-3dtiles-"
+  labels:
+    # TODO: What is?
+    workflows.argoproj.io/archive-strategy: "false"
+  annotations:
+    workflows.argoproj.io/description: |
+      This is a spike on creating PDG visualization 3d tiles
+spec:
+  entrypoint: "main"
+  templates:
+  - name: "main"
+    dag:
+      tasks:
+        - name: "viz-3dtiles"
+          template: "viz-3dtiles-template"
+
+  - name: "viz-3dtiles-template"
+    inputs:
+      artifacts:
+        - name: "viz-3dtiles-input"
+          http:
+            url: "https://github.com/QGreenland-Net/argo-exploration/raw/medium-workflow/data/Ice_Basins_1000.gpkg"
+          path: "/tmp/pdg3dtiles/input/Ice_Basins_1000.gpkg"
+
+    script:
+      image: "ghcr.io/mfisher87/pdg3dtiles"
+      command: ["python"]
+      source: |
+        import os
+        from viz_3dtiles import Cesium3DTile, Tileset
+
+        layer_fp = "{{inputs.artifacts.viz-3dtiles-input.path}}"
+        # output_dir = "{{ouputs.artifacts.viz-3dtiles-output.path}}"
+        # FIXME: Hardcoded.
+        output_dir = "/tmp/pdg3dtiles/run-cesium/tilesets"
+
+        print(layer_fp, output_dir)
+
+        # Create a 3D Tile from the Example shp file
+        tile = Cesium3DTile()
+        # tile.filter_by_attributes={"centroid_within_tile": True}
+        tile.save_to = output_dir # model.b3dm save path
+        # TODO: is 05.2 the same as 5.2?
+        tile.from_file(layer_fp, crs="EPSG:3413", z=05.2)
+
+        # Create a tileset to contain the 3D Tile just created
+        tileset_index_fp = os.path.join(output_dir, "tileset.json")
+        tileset = Tileset.from_Cesium3DTiles(tile, tileset_index_fp)
+
+        assert os.path.isfile(tileset_index_fp)
+
+        print(f"Wrote {tileset_index_fp}")
+
+
+    outputs:
+      artifacts:
+        - name: "viz-3dtiles-output"
+          path: "/tmp/pdg3dtiles/run-cesium/tilesets"
