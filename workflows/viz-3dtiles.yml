@@ -77,6 +77,7 @@ spec:
         # FIXME: Hardcoded.
         output_dir = "/tmp/pdg_processing/run-cesium/tilesets"
 
+        # TODO: Read the staging_summary.csv file instead?
         input_tiles = glob(
           "{{inputs.artifacts.staging-output.path}}/**/*.gpkg",
           recursive=True,
@@ -89,8 +90,7 @@ spec:
           tile = Cesium3DTile()
           # tile.filter_by_attributes={"centroid_within_tile": True}
           tile.save_to = output_dir # model.b3dm save path
-          # TODO: is 05.2 the same as 5.2?
-          tile.from_file(tile_file, crs="EPSG:3413", z=05.2)
+          tile.from_file(tile_file, crs="EPSG:3413", z=5.2)
           tiles.append(tile)
 
         # Create a tileset to contain the 3D Tile just created
