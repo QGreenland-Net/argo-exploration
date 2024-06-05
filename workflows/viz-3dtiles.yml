@@ -14,7 +14,19 @@ spec:
   - name: "main"
     dag:
       tasks:
+        - name: "ingest"
+          template: "ingest-template"
+          arguments:
+            artifacts:
+              - name: "cut-file"
+                http:
+                  url: "https://raw.githubusercontent.com/nsidc/qgreenland/v3.0.0/qgreenland/assets/greenland_rectangle.geojson"
+              - name: "data-file"
+                http:
+                  url: "https://dataverse.geus.dk/api/access/datafile/freshwater/ice/50067"
+
         - name: "stage"
+          dependencies: ["ingest"]
           template: "stage-template"
 
         - name: "viz-3dtiles"
@@ -24,6 +36,42 @@ spec:
             artifacts:
               - name: "staging-output"
                 from: "{{ tasks.stage.outputs.artifacts.staging-output }}"
+
+
+  - name: "ingest-template"
+    inputs:
+      artifacts:
+        - name: "cut-file"
+          path: "/tmp/input/greenland_rectangle.geojson"
+        - name: "data-file"
+          path: "/tmp/input/basins.gpkg"
+
+    container:
+      image: "ghcr.io/osgeo/gdal:alpine-normal-latest"
+      command: ["ogr2ogr"]
+      args:
+        - "-lco"
+        - "ENCODING=UTF-8"
+        - "-t_srs"
+        - "EPSG:3413"
+        - "-clipdst"
+        - "{{ inputs.artifacts.cut-file.path }}"
+        - "-makevalid"
+        - "{{ outputs.artifacts.ingest-output.path }}/basins.gpkg"
+        - "{{ inputs.artifacts.data-file.path }}"
+      volumeMounts:
+        - name: "output-mount"
+          # TODO: DRY
+          mountPath: "/tmp/output"
+
+    volumes:
+      - name: "output-mount"
+        emptyDir: {}
+    outputs:
+      artifacts:
+        - name: "ingest-output"
+          path: "/tmp/output"
+
 
   - name: "stage-template"
     inputs:
@@ -58,6 +106,7 @@ spec:
           # IMPORTANT: Config must match this.
           path: "/tmp/pdg_processing/output/staged"
 
+
   - name: "viz-3dtiles-template"
     inputs:
       artifacts:
@@ -79,7 +128,7 @@ spec:
 
         # TODO: Read the staging_summary.csv file instead?
         input_tiles = glob(
-          "{{inputs.artifacts.staging-output.path}}/**/*.gpkg",
+          "{{ inputs.artifacts.staging-output.path }}/**/*.gpkg",
           recursive=True,
         )
         print(input_tiles)
