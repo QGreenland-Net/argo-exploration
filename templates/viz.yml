@@ -1,0 +1,92 @@
+apiVersion: "argoproj.io/v1alpha1"
+kind: "WorkflowTemplate"
+metadata:
+  name: "ogdc-viz-workflow"
+  annotations:
+    workflows.argoproj.io/description: |
+      Steps for the PDG visualization pipeline.
+
+spec:
+  templates:
+
+    - name: "viz-stage"
+      inputs:
+        # NOTE: Can override these with "arguments"
+        artifacts:
+          - name: "viz-config-json"
+            http:
+              url: "https://gist.githubusercontent.com/mfisher87/f13f87949809a4eef0485f3eb05b9534/raw/47cbf12b30b40d0a51da51dd729985ff5a8459e8/qgnet_config.json"
+            path: "/tmp/config.json"
+          - name: "stage-input"
+            http:
+              url: "https://github.com/QGreenland-Net/argo-exploration/raw/medium-workflow/data/Ice_Basins_1000.gpkg"
+            path: "/tmp/pdg_processing/input/Ice_Basins_1000.gpkg"
+
+      script:
+        image: "ghcr.io/mfisher87/pdgstaging"
+        command: ["python"]
+        source: |
+          import json
+          from pathlib import Path
+
+          from pdgstaging import TileStager
+
+          workflow_config = json.loads(Path("{{inputs.artifacts.viz-config-json.path}}").read_text())
+          stager = TileStager(workflow_config, check_footprints=False)
+          stager.stage("{{inputs.artifacts.stage-input.path}}")
+          print("Staging done")
+
+      outputs:
+        artifacts:
+          - name: "staging-output"
+            # IMPORTANT: Config must match this.
+            path: "/tmp/pdg_processing/output/staged"
+
+
+    - name: "viz-3dtiles"
+      inputs:
+        artifacts:
+          - name: "staging-output"
+            # TODO: DRY
+            path: "/tmp/pdg_processing/output/staged"
+
+      script:
+        image: "ghcr.io/mfisher87/pdg3dtiles"
+        command: ["python"]
+        source: |
+          import os
+          from glob import glob
+          from viz_3dtiles import Cesium3DTile, Tileset
+
+          # output_dir = "{{ouputs.artifacts.viz-3dtiles-output.path}}"
+          # FIXME: Hardcoded.
+          output_dir = "/tmp/pdg_processing/run-cesium/tilesets"
+
+          # TODO: Read the staging_summary.csv file instead?
+          input_tiles = glob(
+            "{{ inputs.artifacts.staging-output.path }}/**/*.gpkg",
+            recursive=True,
+          )
+          print(input_tiles)
+
+          tiles = []
+          for tile_file in input_tiles:
+            # Create a 3D Tile from the Example shp file
+            tile = Cesium3DTile()
+            # tile.filter_by_attributes={"centroid_within_tile": True}
+            tile.save_to = output_dir # model.b3dm save path
+            tile.from_file(tile_file, crs="EPSG:3413", z=5.2)
+            tiles.append(tile)
+
+          # Create a tileset to contain the 3D Tile just created
+          tileset_index_fp = os.path.join(output_dir, "tileset.json")
+          tileset = Tileset.from_Cesium3DTiles(tiles, tileset_index_fp)
+
+          assert os.path.isfile(tileset_index_fp)
+
+          print(f"Wrote {tileset_index_fp}")
+
+      outputs:
+        artifacts:
+          - name: "viz-3dtiles-output"
+            path: "/tmp/pdg_processing/run-cesium/tilesets"
