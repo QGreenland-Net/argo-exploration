@@ -40,14 +40,38 @@ argo submit -n argo --watch workflows/seal-tags-csv.yml
 ```
 
 
+## Medium workflow spike
+
+We integrated a QGreenland workflow with a portion of the PDG visualization workflow.
+The PDG vizualiation workflow steps are encapsulated as a
+[WorkflowTemplate](https://argo-workflows.readthedocs.io/en/latest/workflow-templates/),
+and the workflow references that template.
+
+### WorkflowTemplate
+
+This is a "building block" that's installed to the cluster. To install ours:
+
+```bash
+argo -n argo template create templates/viz.yml
+```
+
+
+### Workflow proper
+
+The workflow itself is run as usual once the templates are installed:
+
+```bash
+argo -n argo submit --watch workflows/ice_basins_viz.yml
+```
+
+
 ## Takeaways
 
-* Generally impressed with user experience, polish, ease. Took 1 hour to build
-  end-to-end, starting from knowing nothing and Argo not installed, to finishing our
-  seal tags example.
-* Submitting and watching jobs is amazing
+* Generally impressed with user experience, polish, ease. Took 1 hour to build as small
+  example end-to-end, starting from knowing nothing and Argo not installed, to
+  finishing `workflows/seal-tag-csv.yml`.
+* Submitting and watching jobs is an amazing UX compared to other tools we tested
 * `argo logs @latest` :star_struck:
-* Next step: dependencies, >1 processing step
 
 
 ## Resources
