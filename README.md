@@ -65,6 +65,13 @@ argo -n argo submit --watch workflows/ice_basins_viz.yml
 ```
 
 
+## Troubleshooting
+
+* `something.tar.gz does not exist` (TODO: Exact message). A task or step failed to
+  create an output artifact file or directory. These need to be gzipped to complete the
+  job and provide data to the next step, but the error message is a bit confusing.
+
+
 ## Takeaways
 
 * Generally impressed with user experience, polish, ease. Took 1 hour to build as small
