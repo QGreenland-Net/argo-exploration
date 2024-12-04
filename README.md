@@ -53,3 +53,5 @@ argo submit -n argo --watch workflows/seal-tags-csv.yml
 ## Resources
 
 * <https://github.com/akuity/awesome-argo>
+
+#### NOTE: This is an exploratory repository so not everything is expected to work perfectly. The medium-workflow and lessons learned will be moved into [ogdc-runner](https://github.com/QGreenland-Net/ogdc-runner) and [ogdc-recipes](https://github.com/QGreenland-Net/ogdc-recipes). 
