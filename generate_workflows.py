@@ -218,7 +218,8 @@ def reject_incompatible_layer(layer: dict) -> Never:
 
         if not any(
             cmd.startswith(valid_prefix)
-            for valid_prefix in ("gdal", "ogr2ogr")
+            # need to dig deeper here on why this was done
+            for valid_prefix in ("gdal", "ogr2ogr", "unzip", "cp")
         ):
             raise IncompatibleLayerError(
                 f"Layer {layer['name']} step starts with incompatible command: {cmd}"
