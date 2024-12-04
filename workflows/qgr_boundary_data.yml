@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: ogdc-recipe-qgr-boundary-data-
+  labels:
+    workflows.argoproj.io/archive-strategy: 'false'
+  annotations:
+    workflows.argoproj.io/description: 'Polygon representing the tight boundary for
+      QGreenland
+
+      data/imagery.'
+    qgreenlandLayerId: qgr_boundary_data
+spec:
+  entrypoint: main
+  templates:
+  - name: main
+    steps:
+    - - name: step-0
+        inline:
+          container:
+            image: ghcr.io/osgeo/gdal:alpine-normal-3.9.0
+            command:
+            - ogr2ogr
+            args:
+            - -lco
+            - ENCODING=UTF-8
+            - -t_srs
+            - EPSG:3413
+            - -clipdst
+            - /tmp/assets_dir/latitude_shape_40_degrees.geojson
+            - -makevalid
+            - /tmp/output_dir/boundary.gpkg
+            - /tmp/input_dir/greenland_rectangle.geojson
+            volumeMounts:
+            - name: output-mount
+              mountPath: /tmp/output_dir
+          volumes:
+          - name: output-mount
+            emptyDir: {}
+          inputs:
+            artifacts:
+            - name: step-0-assets_dir
+              path: /tmp/assets_dir/latitude_shape_40_degrees.geojson
+              http:
+                url: https://raw.githubusercontent.com/nsidc/qgreenland/v3.0.0/qgreenland/assets/latitude_shape_40_degrees.geojson
+            - name: step-0-input_dir
+              path: /tmp/input_dir/greenland_rectangle.geojson
+              http:
+                url: https://raw.githubusercontent.com/nsidc/qgreenland/v3.0.0/qgreenland/assets/greenland_rectangle.geojson
+          outputs:
+            artifacts:
+            - name: step-0-output_dir
+              path: /tmp/output_dir

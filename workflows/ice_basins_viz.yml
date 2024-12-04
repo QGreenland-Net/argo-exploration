@@ -1,0 +1,78 @@
+apiVersion: "argoproj.io/v1alpha1"
+kind: "Workflow"
+metadata:
+  generateName: "ogdc-recipe-ice-basins-pdg-"
+  labels:
+    # TODO: What is?
+    workflows.argoproj.io/archive-strategy: "false"
+  annotations:
+    workflows.argoproj.io/description: |
+      This is a spike on creating PDG visualization tiles for the QGreenland
+      ice basins layer
+spec:
+  entrypoint: "main"
+  templates:
+  - name: "main"
+    dag:
+      tasks:
+        - name: "stage"
+          template: "stage-template"
+
+        - name: "rasterize"
+          dependencies: ["stage"]
+          template: "rasterize-template"
+          arguments:
+            artifacts:
+              - name: "staging-output"
+                from: "{{ tasks.stage.outputs.artifacts.staging-output }}"
+
+
+  - name: "stage-template"
+    inputs:
+      # NOTE: Can override these with "arguments"
+      artifacts:
+        - &viz-config-json-artifact
+          name: "viz-config-json"
+          http:
+            url: "https://gist.githubusercontent.com/mfisher87/f13f87949809a4eef0485f3eb05b9534/raw/47cbf12b30b40d0a51da51dd729985ff5a8459e8/qgnet_config.json"
+          path: "/tmp/config.json"
+        - name: "staging-input"
+          http:
+            # url: "https://nsidc.org/qgreenland/layers/ice_basins/ice_basins.gpkg"
+            url: "https://github.com/QGreenland-Net/argo-exploration/raw/medium-workflow/data/Ice_Basins_1000.gpkg"
+          path: "/tmp/pdg_processing/input/ice_basins.gpkg"
+
+    container:
+      image: "ghcr.io/mfisher87/pdgstaging"
+      command: ["python"]
+      args: ["-m", "pdgstaging", "-c", "{{inputs.artifacts.viz-config-json.path}}"]
+
+    outputs:
+      artifacts:
+        # NOTE: We expected the output to contain z-levels 0,1,2,...,13
+        # (as specified by JSON config input), but it only contained
+        # 13. TODO: Figure out if we're using pdgstaging wrong or if
+        # it's a bug??
+        - name: "staging-output"
+          # IMPORTANT: Config must match this.
+          path: "/tmp/pdg_processing/output/staged"
+
+
+  - name: "rasterize-template"
+    inputs:
+      artifacts:
+        - *viz-config-json-artifact
+        - name: "staging-output"
+          # IMPORTANT: Config must match this.
+          path: "/tmp/pdg_processing/output/staged"
+
+    container:
+      image: "ghcr.io/permafrostdiscoverygateway/viz-workflow:0.2.3"
+      command: ["python"]
+      args: ["-m", "pdgraster", "-c", "{{inputs.artifacts.viz-config-json.path}}"]
+
+    outputs:
+      artifacts:
+        - name: "raster-output"
+          # IMPORTANT: Config must match this.
+          path: "/tmp/pdg_processing/output/raster"

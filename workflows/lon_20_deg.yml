@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: ogdc-recipe-lon-20-deg-
+  labels:
+    workflows.argoproj.io/archive-strategy: 'false'
+  annotations:
+    workflows.argoproj.io/description: Lines of longitude in 20-degree resolution.
+    qgreenlandLayerId: lon_20_deg
+spec:
+  entrypoint: main
+  templates:
+  - name: main
+    steps:
+    - - name: step-0
+        inline:
+          container:
+            image: ghcr.io/osgeo/gdal:alpine-normal-3.9.0
+            command:
+            - ogr2ogr
+            args:
+            - -lco
+            - ENCODING=UTF-8
+            - -t_srs
+            - EPSG:3413
+            - -segmentize
+            - '100'
+            - -clipdst
+            - /tmp/assets_dir/latitude_shape_40_degrees.geojson
+            - /tmp/output_dir/clipped.gpkg
+            - /tmp/input_dir/*.geojson
+            volumeMounts:
+            - name: output-mount
+              mountPath: /tmp/output_dir
+          volumes:
+          - name: output-mount
+            emptyDir: {}
+          inputs:
+            artifacts:
+            - name: step-0-assets_dir
+              path: /tmp/assets_dir/latitude_shape_40_degrees.geojson
+              http:
+                url: https://raw.githubusercontent.com/nsidc/qgreenland/v3.0.0/qgreenland/assets/latitude_shape_40_degrees.geojson
+            - name: step-0-input_dir
+              path: /tmp/input_dir/*.geojson
+              http:
+                url: https://raw.githubusercontent.com/nsidc/qgreenland/v3.0.0/qgreenland/assets/*.geojson
+          outputs:
+            artifacts:
+            - name: step-0-output_dir
+              path: /tmp/output_dir
