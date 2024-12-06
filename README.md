@@ -36,7 +36,7 @@ kubectl -n argo port-forward service/argo-server 2746:2746
 #### Real workflow
 
 ```bash
-argo submit -n argo --watch workflows/seal-tags-csv.yml
+argo submit -n argo --watch workflows/seal-tag-csv.yml
 ```
 
 
