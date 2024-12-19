@@ -1,5 +1,12 @@
 # argo spike
 
+Exploratory repo for evaluating the use of Argo Workflows as the orchestrator
+for OGDC recipes.
+
+The QGreenland-Net team decided to move forward with the use of argo for the
+OGDC. See the [ogdc-runner](https://github.com/QGreenland-Net/ogdc-runner/)
+repository for the lastest developments.
+
 ## Setup
 
 ### Argo CLI
