@@ -1,5 +1,7 @@
 # argo spike
 
+This repository has been archived.
+
 Exploratory repo for evaluating the use of Argo Workflows as the orchestrator
 for OGDC recipes.
 
